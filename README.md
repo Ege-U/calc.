@@ -6,5 +6,6 @@ You can choose out of 26 themes and you can make your own custom ones!
 # Dependencies
 "calc.py" requires "matplotlib" & "numpy" to work
 # calc-zero
-"calc-zero" just has no dependencies.
+"calc-zero" is made to have no dependencies.
+It doesn't have graph plotting to not have any dependencies.
 "calc-zero" is only available as a ".py" file.
