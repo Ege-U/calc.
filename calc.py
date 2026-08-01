@@ -466,6 +466,15 @@ def press(key):
         expression += "e"
     elif key == "x²":
         expression += "**2"
+    elif key == "%":
+        try:
+            val = float(eval_with_timeout(sanitize(expression)))
+            result = val / 100
+            if result == int(result):
+                result = int(result)
+            expression = str(result)
+        except Exception:
+            expression = "Error"
     elif key == "^":
         expression += "^"
     else:
@@ -499,6 +508,18 @@ def update_history():
 def roast():
     play_sound("equals")
     display_var.set(random.choice(ROASTS))
+
+def copy_to_clipboard():
+    play_sound("equals")
+    try:
+        root.clipboard_clear()
+        root.clipboard_append(display_var.get())
+        root.update()
+        copy_status_var.set("Copied!")
+        root.after(1200, lambda: copy_status_var.set(""))
+    except Exception:
+        copy_status_var.set("Copy failed")
+        root.after(1200, lambda: copy_status_var.set(""))
 
 def open_graph():
     play_sound("operator")
@@ -707,7 +728,7 @@ def key_event(event):
 if __name__ == "__main__":
     load_custom_themes()
     root = tk.Tk()
-    root.title("calc. - v1.11.1")
+    root.title("calc. - v1.12.0")
     root.geometry("740x750")
     root.minsize(740, 750)
     root.resizable(False, False)
@@ -715,7 +736,9 @@ if __name__ == "__main__":
     display_var = tk.StringVar(value="0")
     display = tk.Entry(root, textvariable=display_var, font=("Arial", 20),
                         justify="right", bd=0, highlightthickness=0)
-    display.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=10, pady=10, ipady=12)
+    display.grid(row=0, column=0, columnspan=3, sticky="nsew", padx=(10, 4), pady=10, ipady=12)
+
+    copy_status_var = tk.StringVar(value="")
 
     buttons = [
         ("MC", 1, 0), ("MR", 1, 1), ("M+", 1, 2), ("M-", 1, 3),
@@ -811,6 +834,9 @@ if __name__ == "__main__":
         canvas.set_colors = set_colors
         return canvas
 
+    copy_btn = make_button(root, "📋", copy_to_clipboard)
+    copy_btn.grid(row=0, column=3, sticky="nsew", padx=(0, 10), pady=10)
+
     button_refs = []
     for (text, row, col) in buttons:
         btn = make_button(root, text, lambda t=text: press(t))
@@ -838,6 +864,9 @@ if __name__ == "__main__":
 
     side_labels = []
     side_buttons = []
+
+    copy_status_lbl = tk.Label(side, textvariable=copy_status_var, font=("Arial", 9, "italic"), fg="#34c759")
+    copy_status_lbl.pack(anchor="e")
 
     lbl = tk.Label(side, text="Programmer Base", font=("Arial", 11, "bold")); lbl.pack(anchor="w")
     side_labels.append(lbl)
