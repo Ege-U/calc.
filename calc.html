@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>calc. — v2.0 (JS port)</title>
+<style>
+:root{
+  --bg:#f5f5f7; --display:#ffffff; --btn:#ffffff; --btn-op:#e5e5ea;
+  --btn-eq:#ff9500; --fg:#1c1c1e; --label-fg:#3a3a3c;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+  background:var(--bg); color:var(--fg); font-family:Arial, Helvetica, sans-serif;
+  transition:background .25s ease;
+}
+.app{
+  display:grid; grid-template-columns:340px 240px; gap:20px;
+  padding:20px; max-width:640px; width:100%;
+}
+.display{
+  grid-column:1 / -1; background:var(--display); color:var(--fg);
+  border-radius:12px; padding:16px 18px; font-size:26px; text-align:right;
+  min-height:36px; word-break:break-all; box-shadow:0 1px 2px rgba(0,0,0,.08);
+}
+.pad{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:8px; align-content:start;
+}
+.pad button, .roast, .sidebar button{
+  border:none; border-radius:12px; padding:12px 4px; font-size:15px; font-weight:600;
+  cursor:pointer; color:var(--fg); background:var(--btn);
+  box-shadow:0 1px 2px rgba(0,0,0,.10);
+  transition:transform .05s ease, filter .15s ease, background .2s ease, box-shadow .2s ease;
+}
+.pad button:hover, .sidebar button:hover{ filter:brightness(1.06); box-shadow:0 2px 5px rgba(0,0,0,.14); }
+.pad button:active{ transform:scale(.94); box-shadow:0 1px 1px rgba(0,0,0,.10); }
+.pad button:focus-visible, .sidebar button:focus-visible, .roast:focus-visible,
+select:focus-visible, .conv-display:focus-visible{
+  outline:2px solid var(--btn-eq); outline-offset:2px;
+}
+.pad button.op{ background:var(--btn-op); }
+.pad button.eq{ background:var(--btn-eq); color:#fff; }
+.pad button.wide{ grid-column:span 2; }
+.roast{
+  grid-column:1/-1; margin-top:4px; background:#e24b4a; color:#fff;
+  padding:12px; border-radius:12px; font-weight:700; cursor:pointer;
+  box-shadow:0 1px 2px rgba(0,0,0,.15);
+}
+.roast:hover{ filter:brightness(1.08); }
+
+@media (max-width:620px){
+  .app{ grid-template-columns:1fr; }
+  .display{ font-size:22px; }
+}
+.sidebar{ display:flex; flex-direction:column; gap:10px; font-size:13px; }
+.sidebar h4{ margin:6px 0 0; color:var(--label-fg); font-size:12px; letter-spacing:.03em; }
+.prog-line{ font-family:'Courier New',monospace; font-weight:700; color:var(--label-fg); }
+select, .conv-display, .theme-name-input{
+  width:100%; padding:8px; border-radius:8px; border:1px solid rgba(0,0,0,.15);
+  background:var(--display); color:var(--fg); font-size:13px;
+}
+.conv-display{ text-align:right; font-size:16px; }
+.conv-pad{ display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:4px; }
+.conv-pad button{ padding:8px 0; font-size:13px; }
+.conv-pad button.wide{ grid-column:span 3; }
+#history{
+  list-style:none; margin:0; padding:6px; background:var(--display); border-radius:8px;
+  min-height:50px; max-height:70px; overflow-y:auto; font-size:11px; color:var(--fg);
+}
+#history li{ padding:2px 0; border-bottom:1px solid rgba(0,0,0,.06); }
+#graphCanvas{ width:100%; background:var(--display); border-radius:8px; margin-top:4px; }
+.result-line{ font-size:12px; font-weight:700; color:var(--label-fg); }
+
+/* Theme studio modal */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.5); display:none;
+  align-items:center; justify-content:center; z-index:10;
+}
+.modal-backdrop.open{ display:flex; }
+.modal{
+  background:#2c2c2e; color:#fff; border-radius:12px; padding:20px; width:340px;
+  max-height:90vh; overflow:auto;
+}
+.modal h3{ margin-top:0; }
+.swatch-row{ display:flex; align-items:center; justify-content:space-between; margin:6px 0; font-size:12px; }
+.swatch-row input[type=color]{ width:34px; height:24px; border:none; border-radius:4px; background:none; cursor:pointer; }
+.preview-card{ border:2px solid #555; border-radius:8px; padding:10px; margin:10px 0; }
+.preview-card .pdisp{ padding:6px; border-radius:6px; text-align:right; font-size:13px; }
+.preview-card .prow{ display:flex; gap:6px; margin-top:6px; }
+.preview-card .prow span{ flex:1; text-align:center; padding:6px 0; border-radius:6px; font-size:12px; font-weight:700; }
+.modal button.save{ width:100%; margin-top:10px; padding:10px; border:none; border-radius:8px; background:#ff9500; color:#fff; font-weight:700; cursor:pointer; }
+.modal input[type=text]{ width:100%; padding:6px; border-radius:6px; border:1px solid #555; background:#1c1c1e; color:#fff; margin-bottom:8px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="display" id="display">0</div>
+
+  <div class="pad" id="pad"></div>
+
+  <div class="sidebar">
+    <h4>PROGRAMMER BASE</h4>
+    <div class="prog-line" id="hexLine">HEX: -</div>
+    <div class="prog-line" id="decLine">DEC: -</div>
+    <div class="prog-line" id="octLine">OCT: -</div>
+    <div class="prog-line" id="binLine">BIN: -</div>
+
+    <h4>THEME</h4>
+    <select id="themeSelect"></select>
+    <button id="createThemeBtn">🎨 Create Theme</button>
+
+    <h4>SOUND PROFILE</h4>
+    <select id="soundSelect">
+      <option>Mute</option>
+      <option>Mechanical Click</option>
+      <option>8-Bit Retro</option>
+      <option>Arcade</option>
+      <option>Laser</option>
+      <option>Smooth Chords</option>
+    </select>
+
+    <h4>HISTORY</h4>
+    <ul id="history"></ul>
+
+    <h4>UNIT CONVERTER</h4>
+    <select id="convSelect">
+      <option>km -> miles</option>
+      <option>miles -> km</option>
+      <option>kg -> lb</option>
+      <option>lb -> kg</option>
+      <option>C -> F</option>
+      <option>F -> C</option>
+    </select>
+    <input class="conv-display" id="convDisplay" readonly value="0">
+    <div class="conv-pad" id="convPad"></div>
+    <div class="result-line" id="convResult">Result: -</div>
+
+    <h4>GRAPH</h4>
+    <button id="plotBtn">Plot Graph (uses display expr)</button>
+    <canvas id="graphCanvas" width="220" height="140"></canvas>
+  </div>
+
+  <button class="roast" id="roastBtn">Roast Calculator App</button>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3>Theme Studio</h3>
+    <input type="text" id="themeNameInput" value="My Custom Theme">
+    <div id="swatchFields"></div>
+    <div class="preview-card" id="previewCard">
+      <div class="pdisp" id="previewDisp">123 + 456</div>
+      <div class="prow">
+        <span id="pB1">7</span><span id="pB2">+</span><span id="pB3">=</span>
+      </div>
+    </div>
+    <button class="save" id="saveThemeBtn">💾 Save &amp; Apply Theme</button>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// THEMES
+// ==========================================
+const DEFAULT_THEMES = {
+  "Light": {bg:"#f5f5f7",display:"#ffffff",btn:"#ffffff",btn_op:"#e5e5ea",btn_eq:"#ff9500",fg:"#1c1c1e",label_fg:"#3a3a3c"},
+  "Dark": {bg:"#1c1c1e",display:"#2c2c2e",btn:"#3a3a3c",btn_op:"#48484a",btn_eq:"#ff9500",fg:"#ffffff",label_fg:"#ffffff"},
+  "Ocean": {bg:"#0b2431",display:"#123847",btn:"#1c4f61",btn_op:"#0e3947",btn_eq:"#00b4d8",fg:"#ffffff",label_fg:"#ffffff"},
+  "Midnight Violet": {bg:"#120f18",display:"#1e1829",btn:"#262035",btn_op:"#3b3052",btn_eq:"#8b5cf6",fg:"#f3e8ff",label_fg:"#d8b4fe"},
+  "Cyberpunk": {bg:"#0a0a12",display:"#121124",btn:"#1a1836",btn_op:"#2d2759",btn_eq:"#00f0ff",fg:"#00f0ff",label_fg:"#ff007f"},
+  "Matcha Latte": {bg:"#f4f6f0",display:"#ffffff",btn:"#e8ede0",btn_op:"#d6e0c7",btn_eq:"#84a98c",fg:"#2f3e46",label_fg:"#52796f"},
+  "Vaporwave": {bg:"#1a1030",display:"#28184a",btn:"#3a2361",btn_op:"#4e2f7a",btn_eq:"#ff6ec7",fg:"#7ee8fa",label_fg:"#ff6ec7"},
+  "Forest": {bg:"#1b2e1f",display:"#243b29",btn:"#2f4d35",btn_op:"#3d6144",btn_eq:"#a3c586",fg:"#e8f0e3",label_fg:"#a3c586"},
+  "Neon Jungle": {bg:"#0a1f0a",display:"#122b12",btn:"#1c421c",btn_op:"#286028",btn_eq:"#39ff14",fg:"#d4ffcc",label_fg:"#39ff14"},
+  "Blood Moon": {bg:"#160303",display:"#2b0606",btn:"#3f0a0a",btn_op:"#5c0f0f",btn_eq:"#e50914",fg:"#ffd6d6",label_fg:"#e50914"},
+};
+let THEMES = JSON.parse(JSON.stringify(DEFAULT_THEMES));
+let currentTheme = "Light";
+
+function applyTheme(name){
+  currentTheme = name;
+  const t = THEMES[name];
+  const r = document.documentElement.style;
+  r.setProperty('--bg', t.bg);
+  r.setProperty('--display', t.display);
+  r.setProperty('--btn', t.btn);
+  r.setProperty('--btn-op', t.btn_op);
+  r.setProperty('--btn-eq', t.btn_eq);
+  r.setProperty('--fg', t.fg);
+  r.setProperty('--label-fg', t.label_fg);
+  document.getElementById('themeSelect').value = name;
+}
+
+function refreshThemeSelect(){
+  const sel = document.getElementById('themeSelect');
+  sel.innerHTML = '';
+  Object.keys(THEMES).forEach(name=>{
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  sel.value = currentTheme;
+}
+
+// ==========================================
+// AUDIO SYNTH (Web Audio API port of the WAV synth)
+// ==========================================
+let audioCtx = null;
+let soundPreset = "Mute";
+function getCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playSound(type="number"){
+  if(soundPreset === "Mute") return;
+  try{
+    const ctx = getCtx();
+    const sr = 22050;
+    let duration;
+    if(soundPreset === "Mechanical Click") duration = type==="equals" ? 0.05 : 0.035;
+    else if(soundPreset === "Laser") duration = type==="equals" ? 0.22 : 0.06;
+    else if(soundPreset === "Arcade") duration = type==="equals" ? 0.15 : 0.05;
+    else duration = type==="equals" ? 0.18 : 0.08;
+
+    const n = Math.max(1, Math.floor(sr*duration));
+    const buf = ctx.createBuffer(1, n, sr);
+    const data = buf.getChannelData(0);
+
+    for(let i=0;i<n;i++){
+      const t = i/sr;
+      let val01; // 0..1 sample, will map to -1..1
+
+      if(soundPreset === "Mechanical Click"){
+        let sf,ef;
+        if(type==="operator"){sf=950;ef=420;}
+        else if(type==="equals"){sf=1200;ef=500;}
+        else if(type==="clear"){sf=750;ef=300;}
+        else {sf=1100;ef=450;}
+        const snap = (Math.random()*80-40)*Math.exp(-400*t);
+        const curFreq = sf*Math.exp(-120*t)+ef;
+        const clickWave = Math.sin(2*Math.PI*((t*curFreq)%1))*60*Math.exp(-140*t);
+        const ringWave = Math.sin(2*Math.PI*((t*4200)%1))*12*Math.exp(-180*t);
+        val01 = (128+snap+clickWave+ringWave)/255;
+
+      } else if(soundPreset === "Arcade"){
+        let freq;
+        if(type==="operator") freq = 1200+800*(t/duration);
+        else if(type==="equals") freq = t<0.05?900:(t<0.10?1200:1600);
+        else if(type==="clear") freq = 1000-700*(t/duration);
+        else freq = 880+200*(t/duration);
+        const phase = (t*freq)%1;
+        let v = phase<0.4 ? 190 : 65;
+        const decay = Math.max(0,1-(t/duration));
+        v = 128+(v-128)*decay;
+        val01 = v/255;
+
+      } else if(soundPreset === "Laser"){
+        let freq;
+        if(type==="operator") freq = 2000*Math.exp(-30*t);
+        else if(type==="equals") freq = 300+1500*Math.sin(2*Math.PI*15*t);
+        else if(type==="clear") freq = 1500*Math.exp(-15*t);
+        else freq = 1200*Math.exp(-40*t);
+        const phase = (t*freq)%1;
+        let v = phase<0.5 ? 200 : 55;
+        const decay = Math.max(0,1-(t/duration));
+        v = 128+(v-128)*decay;
+        val01 = v/255;
+
+      } else if(soundPreset === "Smooth Chords"){
+        let freq;
+        if(type==="operator") freq = 523.25;
+        else if(type==="equals") freq = 659.25;
+        else if(type==="clear") freq = 392.00;
+        else freq = 440.00;
+        const phase = (t*freq)%1;
+        const tri = 4*Math.abs(phase-0.5)-1.0;
+        const decay = Math.max(0,1-(t/duration));
+        val01 = (128+50*tri*decay)/255;
+
+      } else { // 8-Bit Retro
+        let freq;
+        if(type==="operator") freq = 600+600*(t/duration);
+        else if(type==="equals") freq = t<0.06?400:(t<0.12?600:800);
+        else if(type==="clear") freq = 400-300*(t/duration);
+        else freq = 440-200*(t/duration);
+        const phase = (t*freq)%1;
+        let v = phase<0.5 ? 190 : 65;
+        const decay = Math.max(0,1-(t/duration));
+        v = 128+(v-128)*decay;
+        val01 = v/255;
+      }
+      data[i] = Math.max(-1, Math.min(1, val01*2-1));
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start();
+  }catch(e){ /* ignore audio errors */ }
+}
+
+// ==========================================
+// CALCULATOR ENGINE
+// ==========================================
+let expression = "";
+let memory = 0;
+let history = [];
+const ROASTS = [
+  "Calculator app peaked in 1997",
+  "Calculator app has zero themes",
+  "Calculator app has zero roasts. We win.",
+  "Calculator app: 1 + 1 = boring",
+  "Calculator app never left beta energy",
+  "Calculator app dreams of 26 themes",
+  "Calculator app: math homework tier",
+  "Calculator app got cooked. Again.",
+  "Calculator app can't even roast back",
+];
+
+function sanitize(expr){
+  return expr
+    .replace(/\^/g, "**")
+    .replace(/√/g, "sqrt")
+    .replace(/π/g, "PI")
+    .replace(/(?<![a-zA-Z])e(?![a-zA-Z(])/g, "E")
+    .replace(/\bAND\b/g, "&")
+    .replace(/\bXOR\b/g, "^")
+    .replace(/\bOR\b/g, "|")
+    .replace(/\bLSH\b/g, "<<")
+    .replace(/\bRSH\b/g, ">>");
+}
+
+// Safe-ish evaluator: only allow digits, operators, parens, and known function names
+function safeEval(expr){
+  let js = sanitize(expr);
+  js = js.replace(/\*\*/g, "__POW__");
+  js = js.replace(/sin/g, "Math.sin")
+         .replace(/cos/g, "Math.cos")
+         .replace(/tan/g, "Math.tan")
+         .replace(/log/g, "Math.log10")
+         .replace(/sqrt/g, "Math.sqrt")
+         .replace(/abs/g, "Math.abs")
+         .replace(/PI/g, "Math.PI")
+         .replace(/E/g, "Math.E");
+  js = js.replace(/__POW__/g, "**");
+  // balance parens
+  const open = (js.match(/\(/g)||[]).length;
+  const close = (js.match(/\)/g)||[]).length;
+  if(open>close) js += ")".repeat(open-close);
+  if(!/^[0-9+\-*/%.()\s<>&|^A-Za-z]*$/.test(js)) throw new Error("Invalid characters");
+  // eslint-disable-next-line no-new-func
+  return Function('"use strict"; return (' + js + ')')();
+}
+
+function updateProgDisplay(){
+  try{
+    const val = Math.trunc(Number(safeEval(expression)));
+    if(!Number.isFinite(val)) throw new Error();
+    document.getElementById('hexLine').textContent = "HEX: " + (val<0? "-"+Math.abs(val).toString(16).toUpperCase() : val.toString(16).toUpperCase());
+    document.getElementById('decLine').textContent = "DEC: " + val;
+    document.getElementById('octLine').textContent = "OCT: " + (val<0? "-"+Math.abs(val).toString(8) : val.toString(8));
+    document.getElementById('binLine').textContent = "BIN: " + (val<0? "-"+Math.abs(val).toString(2) : val.toString(2));
+  }catch(e){
+    document.getElementById('hexLine').textContent = "HEX: -";
+    document.getElementById('decLine').textContent = "DEC: -";
+    document.getElementById('octLine').textContent = "OCT: -";
+    document.getElementById('binLine').textContent = "BIN: -";
+  }
+}
+
+function updateHistory(){
+  const ul = document.getElementById('history');
+  ul.innerHTML = '';
+  history.slice(-8).reverse().forEach(item=>{
+    const li = document.createElement('li');
+    li.textContent = item;
+    ul.appendChild(li);
+  });
+}
+
+function setDisplay(text){
+  document.getElementById('display').textContent = text;
+}
+
+function press(key){
+  if(["+","-","*","/","%","^","sin","cos","tan","log","√"].includes(key)) playSound("operator");
+  else if(key==="=") playSound("equals");
+  else if(["C","del","MC"].includes(key)) playSound("clear");
+  else playSound("number");
+
+  if(key==="C"){ expression = ""; }
+  else if(key==="del"){ expression = expression.slice(0,-1); }
+  else if(key==="MC"){ memory = 0; }
+  else if(key==="MR"){ expression += String(memory); }
+  else if(key==="M+"){ try{ memory += Number(safeEval(expression)); }catch(e){} }
+  else if(key==="M-"){ try{ memory -= Number(safeEval(expression)); }catch(e){} }
+  else if(key==="="){
+    try{
+      let result = safeEval(expression);
+      if(typeof result === "number" && !Number.isInteger(result)) result = Math.round(result*1e6)/1e6;
+      history.push(`${expression} = ${result}`);
+      updateHistory();
+      expression = String(result);
+    }catch(e){
+      expression = "Error";
+    }
+  }
+  else if(["sin","cos","tan","log","√","abs"].includes(key)){ expression += key + "("; }
+  else if(["AND","OR","XOR","LSH","RSH"].includes(key)){ expression += ` ${key} `; }
+  else if(key==="NOT"){
+    try{
+      const val = Math.trunc(Number(safeEval(expression)));
+      expression = String(~val);
+    }catch(e){ expression = "Error"; }
+  }
+  else if(key==="π"){ expression += "π"; }
+  else if(key==="e"){ expression += "e"; }
+  else if(key==="x²"){ expression += "**2"; }
+  else { expression += key; }
+
+  setDisplay(expression || "0");
+  updateProgDisplay();
+}
+
+function roast(){
+  playSound("equals");
+  setDisplay(ROASTS[Math.floor(Math.random()*ROASTS.length)]);
+}
+
+// ==========================================
+// BUILD BUTTON PAD
+// ==========================================
+const BUTTONS = [
+  "MC","MR","M+","M-",
+  "C","del","%","/",
+  "7","8","9","*",
+  "4","5","6","-",
+  "1","2","3","+",
+  "0",".","√","=",
+  "sin","cos","tan","log",
+  "^","π","e","x²",
+  "AND","OR","XOR","NOT",
+  "LSH","RSH",
+  "(",")","x","abs",
+];
+const OP_KEYS = new Set(["C","del","%","MC","MR","M+","M-"]);
+const BUTTON_TITLES = {
+  "x": "Variable — use this when building an expression to graph (e.g. x**2 + 3)",
+  "abs": "Absolute value, e.g. abs(x)",
+  "x²": "Square the current expression",
+};
+
+function buildPad(){
+  const pad = document.getElementById('pad');
+  BUTTONS.forEach(key=>{
+    const b = document.createElement('button');
+    b.textContent = key;
+    if(key==="=") b.classList.add('eq');
+    else if(OP_KEYS.has(key) || ["/","*","-","+","sin","cos","tan","log","^","AND","OR","XOR","NOT","(",")","abs"].includes(key)) b.classList.add('op');
+    if(key==="LSH" || key==="RSH") b.classList.add('wide');
+    if(BUTTON_TITLES[key]) b.title = BUTTON_TITLES[key];
+    b.addEventListener('click', ()=>press(key));
+    pad.appendChild(b);
+  });
+}
+
+// ==========================================
+// UNIT CONVERTER
+// ==========================================
+const CONV_BUTTONS = ["7","8","9","4","5","6","1","2","3","0",".","C","del"];
+function buildConvPad(){
+  const pad = document.getElementById('convPad');
+  CONV_BUTTONS.forEach(key=>{
+    const b = document.createElement('button');
+    b.textContent = key;
+    if(key==="del") b.classList.add('wide');
+    b.addEventListener('click', ()=>convertPress(key));
+    pad.appendChild(b);
+  });
+}
+
+function convertPress(key){
+  playSound((key==="C"||key==="del") ? "clear" : "number");
+  const disp = document.getElementById('convDisplay');
+  let cur = disp.value;
+  if(key==="C") cur = "0";
+  else if(key==="del") cur = cur.length>1 ? cur.slice(0,-1) : "0";
+  else if(key===".") { if(!cur.includes(".")) cur += "."; }
+  else cur = (cur==="0") ? key : cur+key;
+  disp.value = cur;
+  executeConversion();
+}
+
+function executeConversion(){
+  const resEl = document.getElementById('convResult');
+  const val = parseFloat(document.getElementById('convDisplay').value);
+  if(Number.isNaN(val)){ resEl.textContent = "Invalid number"; return; }
+  const choice = document.getElementById('convSelect').value;
+  let res;
+  switch(choice){
+    case "km -> miles": res = val*0.621371; break;
+    case "miles -> km": res = val/0.621371; break;
+    case "kg -> lb": res = val*2.20462; break;
+    case "lb -> kg": res = val/2.20462; break;
+    case "C -> F": res = (val*9/5)+32; break;
+    case "F -> C": res = (val-32)*5/9; break;
+  }
+  resEl.textContent = "Result: " + (Math.round(res*10000)/10000);
+}
+
+// ==========================================
+// GRAPH PLOTTING (canvas, replaces matplotlib)
+// ==========================================
+function plotGraph(){
+  playSound("operator");
+  const canvas = document.getElementById('graphCanvas');
+  const ctx2d = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx2d.clearRect(0,0,w,h);
+
+  const rawText = document.getElementById('display').textContent;
+  try{
+    // Convert every calculator symbol/function into valid JS, once, up front.
+    let js = rawText
+      .replace(/\^/g, "**")
+      .replace(/√/g, "sqrt")
+      .replace(/π/g, "PI")
+      .replace(/sin/g,"Math.sin").replace(/cos/g,"Math.cos").replace(/tan/g,"Math.tan")
+      .replace(/sqrt/g,"Math.sqrt").replace(/log/g,"Math.log10")
+      .replace(/abs/g,"Math.abs")
+      .replace(/PI/g,"Math.PI");
+
+    if(js.trim() === "" || js.trim() === "0" || !/x/.test(js)){
+      setDisplay("Error: enter an expression with x, e.g. x**2");
+      return;
+    }
+
+    // eslint-disable-next-line no-new-func
+    const fn = Function('x', '"use strict"; return (' + js + ')');
+
+    const xs = [], ys = [];
+    for(let i=0;i<=400;i++){
+      const x = -10 + (20*i/400);
+      let y;
+      try{ y = fn(x); }catch(e){ y = NaN; }
+      xs.push(x); ys.push(Number.isFinite(y) ? y : NaN);
+    }
+    const validYs = ys.filter(Number.isFinite);
+    if(validYs.length === 0){
+      setDisplay("Error: Invalid Equation");
+      return;
+    }
+    const yMin = Math.min(...validYs), yMax = Math.max(...validYs);
+    const yRange = (yMax-yMin) || 1;
+
+    const toPx = (x,y)=>{
+      const px = ((x+10)/20)*w;
+      const py = h - ((y-yMin)/yRange)*h;
+      return [px,py];
+    };
+
+    // axes
+    ctx2d.strokeStyle = "#999"; ctx2d.lineWidth = 1;
+    const [zx] = toPx(0,0); const [,zy] = toPx(0,0);
+    ctx2d.beginPath(); ctx2d.moveTo(zx,0); ctx2d.lineTo(zx,h); ctx2d.stroke();
+    ctx2d.beginPath(); ctx2d.moveTo(0,zy); ctx2d.lineTo(w,zy); ctx2d.stroke();
+
+    // curve
+    ctx2d.strokeStyle = THEMES[currentTheme].btn_eq;
+    ctx2d.lineWidth = 2;
+    ctx2d.beginPath();
+    let started = false;
+    xs.forEach((x,i)=>{
+      if(!Number.isFinite(ys[i])){ started=false; return; }
+      const [px,py] = toPx(x,ys[i]);
+      if(!started){ ctx2d.moveTo(px,py); started=true; }
+      else ctx2d.lineTo(px,py);
+    });
+    ctx2d.stroke();
+  }catch(e){
+    setDisplay("Error: Invalid Equation");
+  }
+}
+
+// ==========================================
+// THEME STUDIO
+// ==========================================
+const THEME_FIELDS = [
+  ["Background (bg)","bg"], ["Display Box (display)","display"], ["Number Buttons (btn)","btn"],
+  ["Operator Keys (btn_op)","btn_op"], ["Equals Key (btn_eq)","btn_eq"],
+  ["Text Color (fg)","fg"], ["Sidebar Text (label_fg)","label_fg"],
+];
+let studioColors = {};
+
+function openThemeCreator(){
+  playSound("operator");
+  studioColors = {...THEMES[currentTheme]};
+  document.getElementById('themeNameInput').value = "My Custom Theme";
+  const fields = document.getElementById('swatchFields');
+  fields.innerHTML = '';
+  THEME_FIELDS.forEach(([label,key])=>{
+    const row = document.createElement('div');
+    row.className = 'swatch-row';
+    row.innerHTML = `<span>${label}</span>`;
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = studioColors[key];
+    input.addEventListener('input', ()=>{
+      studioColors[key] = input.value;
+      updateStudioPreview();
+    });
+    row.appendChild(input);
+    fields.appendChild(row);
+  });
+  updateStudioPreview();
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+function updateStudioPreview(){
+  const card = document.getElementById('previewCard');
+  card.style.background = studioColors.bg;
+  const disp = document.getElementById('previewDisp');
+  disp.style.background = studioColors.display;
+  disp.style.color = studioColors.fg;
+  document.getElementById('pB1').style.background = studioColors.btn;
+  document.getElementById('pB1').style.color = studioColors.fg;
+  document.getElementById('pB2').style.background = studioColors.btn_op;
+  document.getElementById('pB2').style.color = studioColors.fg;
+  document.getElementById('pB3').style.background = studioColors.btn_eq;
+  document.getElementById('pB3').style.color = "#fff";
+}
+
+function saveThemeAndApply(){
+  const name = document.getElementById('themeNameInput').value.trim();
+  if(!name){ alert("Please enter a valid theme name."); return; }
+  playSound("equals");
+  THEMES[name] = {...studioColors};
+  refreshThemeSelect();
+  applyTheme(name);
+  document.getElementById('modalBackdrop').classList.remove('open');
+}
+
+// ==========================================
+// WIRE UP
+// ==========================================
+buildPad();
+buildConvPad();
+refreshThemeSelect();
+applyTheme("Light");
+
+document.getElementById('themeSelect').addEventListener('change', e=>applyTheme(e.target.value));
+document.getElementById('createThemeBtn').addEventListener('click', openThemeCreator);
+document.getElementById('saveThemeBtn').addEventListener('click', saveThemeAndApply);
+document.getElementById('modalBackdrop').addEventListener('click', e=>{
+  if(e.target.id === 'modalBackdrop') document.getElementById('modalBackdrop').classList.remove('open');
+});
+document.getElementById('soundSelect').addEventListener('change', e=>{
+  soundPreset = e.target.value;
+  playSound("equals");
+});
+document.getElementById('convSelect').addEventListener('change', executeConversion);
+document.getElementById('roastBtn').addEventListener('click', roast);
+document.getElementById('plotBtn').addEventListener('click', plotGraph);
+
+document.addEventListener('keydown', e=>{
+  const tag = (e.target.tagName || "").toLowerCase();
+  if(tag === "input" || tag === "select" || tag === "textarea") return;
+  if(document.getElementById('modalBackdrop').classList.contains('open')) return;
+
+  if("0123456789+-*/.%()".includes(e.key)) press(e.key);
+  else if(e.key === "x" || e.key === "X") press("x");
+  else if(e.key === "Enter") press("=");
+  else if(e.key === "Backspace") press("del");
+  else if(e.key === "Escape") press("C");
+});
+
+// Esc closes the theme studio modal too
+document.addEventListener('keydown', e=>{
+  if(e.key === "Escape") document.getElementById('modalBackdrop').classList.remove('open');
+});
+</script>
+</body>
+</html>
