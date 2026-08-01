@@ -343,7 +343,7 @@ expression = ""
 memory = 0.0
 history = []
 
-ROASTS = [
+ROASTS_MILD = [
     "Calculator app peaked in 1997",
     "Calculator app has zero themes",
     "Calculator app has zero roasts. We win.",
@@ -353,7 +353,57 @@ ROASTS = [
     "Calculator app: math homework tier",
     "Calculator app got cooked. Again.",
     "Calculator app can't even roast back",
+    "Calculator app thinks a theme is a font change",
+    "Calculator app's idea of a feature is 'exists'",
+    "Calculator app has one (1) sound: silence",
+    "Calculator app calls itself 'Pro'. Sit down.",
 ]
+
+ROASTS_UNHINGED = [
+    "Calculator app got deleted and nobody noticed",
+    "Calculator app is what happens when ambition gives up",
+    "Calculator app's changelog says 'v1.0' since the Bush administration",
+    "Calculator app has less personality than a TI-83",
+    "Calculator app's roadmap is a single dusty index card",
+    "Calculator app was sponsored by boredom and it shows",
+    "Calculator app is the reason 'basic' is an insult",
+    "Calculator app couldn't graph a straight line if you begged it",
+    "Calculator app's UI designer quit halfway through",
+    "Calculator app: proof that some apps should stay unfinished",
+    "Calculator app has never once made someone smile",
+    "Calculator app is legally required to be this mid",
+]
+
+ROASTS = ROASTS_MILD + ROASTS_UNHINGED
+
+# ==========================================
+# KONAMI CODE EASTER EGG
+# ==========================================
+KONAMI_SEQUENCE = ["Up", "Up", "Down", "Down", "Left", "Right", "Left", "Right", "b", "a"]
+konami_progress = []
+
+def handle_konami(event):
+    global konami_progress
+    key = event.keysym
+    expected = KONAMI_SEQUENCE[len(konami_progress)]
+    if key == expected:
+        konami_progress.append(key)
+        if len(konami_progress) == len(KONAMI_SEQUENCE):
+            konami_progress = []
+            unlock_secret_theme()
+    else:
+        konami_progress = [key] if key == KONAMI_SEQUENCE[0] else []
+
+def unlock_secret_theme():
+    THEMES["??? Secret Mode"] = {
+        "bg": "#000000", "display": "#111111", "btn": "#1a1a1a", "btn_op": "#330033",
+        "btn_eq": "#ff00ff", "fg": "#00ff00", "label_fg": "#ff00ff",
+    }
+    theme_menu["values"] = list(THEMES.keys())
+    theme_var.set("??? Secret Mode")
+    apply_theme("??? Secret Mode")
+    play_sound("equals")
+    display_var.set("You found the secret. Respect.")
 
 
 # ==========================================
@@ -728,7 +778,7 @@ def key_event(event):
 if __name__ == "__main__":
     load_custom_themes()
     root = tk.Tk()
-    root.title("calc. - v1.12.0")
+    root.title("calc. - v1.13.0")
     root.geometry("740x750")
     root.minsize(740, 750)
     root.resizable(False, False)
@@ -857,6 +907,7 @@ if __name__ == "__main__":
         root.grid_columnconfigure(i, weight=1, uniform="calc_col")
 
     root.bind("<Key>", key_event)
+    root.bind("<Key>", handle_konami, add="+")
 
     side = tk.Frame(root, width=220)
     side.grid(row=0, column=4, rowspan=12, sticky="nsew", padx=12, pady=10)
